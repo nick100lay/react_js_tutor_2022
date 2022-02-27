@@ -1,182 +1,160 @@
-import { Pagination, Button, Checkbox, List, Col, Input } from 'antd';
-import React, {Component } from 'react';
+import {
+    Pagination,
+    Button,
+    Checkbox,
+    List,
+    Col,
+    Input,
+    Dropdown,
+    Menu,
+} from 'antd';
+import {
+    useTodos,
+    useUsers,
+} from '../../hooks';
+import React, {
+    useState,
+    useMemo,
+} from 'react';
 
-class TodoView extends Component {
+function TodoView(props) {
+    const todoList = props.todoList
+    const [pageLimit, setPageLimit] = useState(props.pageLimit);
+    const [page, setPage] = useState(props.page);
 
-    state = {
-        curPage: 1,
-        perPage: this.props.perPage,
-    }
+    const pageList = todoList.slice(
+            (page - 1)*pageLimit, page*pageLimit);
 
-    handelerTodoChecked = (todoID) =>{
-        this.props.onTodoChecked(todoID)
-    }
+    console.log(page);
 
-    handlerDeleteTodo = (todoID) => {
-        this.props.onDeleteTodo(todoID)
-    }
+    return (
+        <>
+            <List>
+                {pageList.map((task, idx)=>{
+                    return (
+                            <List.Item key={idx}
+                                    style={{
+                                        listStyle: 'decimal',
+                                    }}>
+                                <Checkbox
+                                        onChange={() => props.onComplete(task.id, task.completed) }
+                                        checked={task.completed ? true : false } />
+                                <p>
+                                    <span>{`${task.userName}: `}</span>
+                                    <span
+                                            style={{
+                                                textDecoration : task.completed ? 'line-through' : 'none'
+                                            }}>
 
-    handlePageChange = (page, pageSize) => {
-        this.setState({
-            curPage: page,
-            perPage: pageSize,
-        })
-    }
-
-    render() {
-        const todoList = this.props.todoList
-        const perPage = this.state.perPage
-        const curPage = this.state.curPage
-
-        const pageList = todoList.slice(
-                (curPage - 1)*perPage, curPage*perPage)
-
-        return (
-            <>
-                <List>
-                    {pageList.map((task, idx)=>{
-                        return (
-                                <List.Item key={idx}
-                                        style={{
-                                            listStyle: 'decimal',
-                                            textDecoration : task.completed ? 'line-through' : 'none'
-                                        }}>
-                                    <Checkbox
-                                            onChange={() => this.handelerTodoChecked(task.id) }
-                                            checked={task.completed ? true : false } />
-
-                                    <p>{task.title}</p>
-
-                                    <Button
-                                            onClick={()=> this.handlerDeleteTodo(task.id) }>
-                                        Удалить
-                                    </Button>
-                                </List.Item>
-                        )
-                    })}
-                </List>
-                <Pagination
-                        onChange={(page, pageSize) => this.handlePageChange(page, pageSize)}
-                        showSizeChanger={false}
-                        defaultCurrent={curPage}
-                        defaultPageSize={perPage}
-                        total={todoList.length} />
-            </>
-        )
-    }
+                                        {task.title}
+                                    </span>
+                                </p>
+                                <Button
+                                        onClick={() => props.onRemove(task.id) }>
+                                    Удалить
+                                </Button>
+                            </List.Item>
+                    )
+                })}
+            </List>
+            <Pagination
+                    onChange={(page, pageSize) => { setPage(page); setPageLimit(pageSize); }}
+                    showSizeChanger={false}
+                    defaultCurrent={page}
+                    defaultPageSize={pageLimit}
+                    total={todoList.length} />
+        </>
+    )
 }
 
-export default class Todo extends Component {
 
-    state = {
-        todoList: [],
-        todoIds: [],
-        perPage : 10,
-    }
+function UserMenu(props) {
+    const menuItems = [
+        {
+            name: '<Все>',
+            onClick: () => props.setCurUserId(null)
+        },
+    ];
+    props.users.forEach((user) => {
+        menuItems.push({
+            name: user.name,
+            onClick: () => props.setCurUserId(user.id)
+        });
+    });
 
-    copyIds() {
-        return this.state.todoIds.map((task) => task)
-    }
+    const menu = (<Menu>
+        {menuItems.map((item, idx) => (
+            <Menu.Item key={idx}>
+                <p onClick={item.onClick}>{item.name}</p>
+            </Menu.Item>
+        ))}
+    </Menu>);
 
-    addTasks(tasks, defDate) {
-        defDate = defDate === undefined ? Date.now() : defDate
-        let todoIds = this.copyIds()
-        let newTasks = tasks.map((task) => {
-            let newTask = {...task}
-            newTask.startDate = newTask.startDate === undefined ?
-                    defDate : newTask.startDate
-            if (newTask.id === undefined) {
-                let id = todoIds.findIndex((task, idx) => idx !== 0 && !task)
-                id = id < 0 ? todoIds.length : id
-                id = id === 0 ? 1 : id
-                newTask.id = id
-            }
-            if (todoIds[newTask.id] !== undefined) {
-                throw new Error(`Task with ID ${newTask.id} already exists`)
-            }
-            newTask.completed = newTask.completed === undefined ? false : newTask.completed
-            todoIds[newTask.id] = newTask
-            return newTask
-        })
-        let todoList = [...this.state.todoList, ...newTasks]
-        this.setState({todoList, todoIds})
-    }
+    return (<>
+        <Dropdown overlay={menu} arrow>
+            <Button>Выбрать пользователя</Button>
+        </Dropdown>
+    </>);
+}
 
-    addTask(task, defDate) {
-        this.addTasks([task], defDate)
-    }
 
-    deleteTask(id) {
-        let todoList = [...this.state.todoList]
-        let todoIds = this.copyIds()
-        if (todoIds[id] === undefined) {
-            throw new Error(`Task with ID ${id} is invalid`)
-        }
-        todoList = todoList.filter((item) => item.id !== id)
-        delete todoIds[id]
-        this.setState({todoList, todoIds})
-    }
+export default function Todo(props) {
+    const [todos, todoApi] = useTodos();
+    const [users] = useUsers();
+    const [curUserId, setCurUserId] = useState(null);
 
-    toggleTask(id) {
-        let todoList = [...this.state.todoList]
-        let todoIds = this.copyIds()
-        if (todoIds[id] === undefined) {
-            throw new Error(`Task with ID ${id} is invalid`)
-        }
-        todoList.every((task, idx) => {
-            if (task.id === id) {
-                let newTask = {
+    const todoList = useMemo(() => (
+        todos !== null ?
+            todos.map((task) => (
+                {
                     ...task,
-                    completed: !task.completed,
+                    userName: users.find((user) => user.id === task.userId).name,
                 }
-                todoList[idx] = newTask
-                todoIds[id] = newTask
-                return false
-            }
-            return true
-        })
-        this.setState({todoList, todoIds})
-    }
-
-    componentDidMount(){
-        fetch('https://jsonplaceholder.typicode.com/todos')
-        .then(res => res.json())
-        .then(res => this.addTasks(res))
-    }
+            )).sort((a, b) => b.startDate - a.startDate)
+            : null
+    ), [todos, users]);
 
 
-    handelerTodoChecked = (todoID) =>{
-        this.toggleTask(todoID)
-    }
+    const todoListFiltered = useMemo(() => (
+        todoList !== null ?
+            (curUserId === null ?
+                todoList :
+                todoList.filter((task) => task.userId === curUserId))
+            : null
+    ), [todoList, curUserId]);
 
-    handlerDeleteTodo = (todoID) => {
-        this.deleteTask(todoID)
-    }
+    const pageLimit = 10;
 
-    handlerAddToTodo = (e) => {
-        let newTask = {
-            title: e.target.value,
-        }
-        this.addTask(newTask)
-    }
-
-    render(){
-        const todoList = [...this.state.todoList]
-        const perPage = this.state.perPage
-
-        todoList.sort((a, b) => b.startDate - a.startDate)
-
+    if (todoListFiltered === null) {
         return (
             <>
-                <Col span={8} style={{margin: '0 auto'}}>
-                    <h3>My todo list</h3>
-                    <Input placeholder='Добавить todo в список' onPressEnter={(e) => this.handlerAddToTodo(e)} />
-                    <TodoView todoList={todoList}
-                            perPage={perPage}
-                            onTodoChecked={this.handelerTodoChecked}
-                            onDeleteTodo={this.handlerDeleteTodo} />
-                </Col>
+                <p>Loading...</p>
             </>
         )
     }
+
+    return (
+        <>
+            <Col span={8} style={{margin: '0 auto'}}>
+                <h3>My todo list</h3>
+                <UserMenu
+                    users={users}
+                    setCurUserId={setCurUserId} />
+                <Input placeholder='Добавить todo в список'
+                    onPressEnter={(e) => {
+                        let title = e.target.value;
+                        let userId = 1;
+                        todoApi.add({title, userId});
+                    }} />
+                <TodoView todoList={todoListFiltered}
+                        page={1}
+                        pageLimit={pageLimit}
+                        onComplete={(id, completed) => {
+                            completed = !completed;
+                            todoApi.modify(id, {completed})
+                        }}
+                        onRemove={(id) => todoApi.remove(id)} />
+            </Col>
+        </>
+    )
 }
